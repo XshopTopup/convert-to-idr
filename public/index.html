@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="id">
 <head>
@@ -23,7 +24,9 @@
                     </div>
                     <div class="mb-3">
                         <label class="form-label small text-muted">Pilih Mata Uang</label>
-                        <select id="kurs" class="form-select form-select-lg"><option>Memuat data...</option></select>
+                        <select id="kurs" class="form-select form-select-lg">
+                            <option value="">Memuat data mata uang...</option>
+                        </select>
                     </div>
                     <button onclick="doConvert()" id="btnAction" class="btn btn-primary btn-lg w-100 fw-bold">Konversi Sekarang</button>
                     <div id="resultArea" class="mt-4 d-none">
@@ -33,13 +36,13 @@
                         </div>
                     </div>
                 </div>
-                <div class="text-center mt-3"><a href="/docs.html" class="text-muted small text-decoration-none">Dokumentasi API</a></div>
+                <div class="text-center mt-3"><a href="/docs" class="text-muted small text-decoration-none">Dokumentasi API</a></div>
             </div>
         </div>
     </div>
 
     <script>
-        // Fungsi format rupiah sesuai permintaan
+        // Fungsi format rupiah
         function rupiah(angka) {
             return new Intl.NumberFormat(
                 'id-ID',
@@ -47,33 +50,73 @@
             ).format(angka || 0);
         }
 
+        // Fungsi mengambil daftar mata uang
         async function fetchOptions() {
-            const r = await fetch('/api/convert');
-            const d = await r.json();
-            const s = document.getElementById('kurs');
-            s.innerHTML = d.data.map(k => `<option value="${k.kode}">${k.kode.toUpperCase()} - ${k.name}</option>`).join('');
-            s.value = "usd";
+            const select = document.getElementById('kurs');
+            try {
+                // Pastikan endpoint ini sesuai dengan rute vercel.json Anda
+                const r = await fetch('/api/convert'); 
+                const d = await r.json();
+
+                if (d.success && d.data && d.data.length > 0) {
+                    select.innerHTML = d.data.map(k => 
+                        `<option value="${k.kode}">${k.kode.toUpperCase()} - ${k.name}</option>`
+                    ).join('');
+                    
+                    // Set default ke USD jika tersedia
+                    if (d.data.some(x => x.kode === 'usd')) {
+                        select.value = "usd";
+                    }
+                } else {
+                    select.innerHTML = '<option value="">Gagal memuat daftar kurs</option>';
+                    console.error("API Response error:", d);
+                }
+            } catch (e) {
+                select.innerHTML = '<option value="">Terjadi kesalahan koneksi</option>';
+                console.error("Fetch error:", e);
+            }
         }
 
+        // Fungsi melakukan konversi
         async function doConvert() {
-            const v = document.getElementById('val').value;
-            const k = document.getElementById('kurs').value;
+            const valInput = document.getElementById('val').value;
+            const kursCode = document.getElementById('kurs').value;
             const btn = document.getElementById('btnAction');
-            btn.disabled = true; btn.innerText = "Memproses...";
+            const resArea = document.getElementById('resultArea');
+
+            if (!kursCode) {
+                alert("Silakan pilih mata uang terlebih dahulu.");
+                return;
+            }
+
+            // Normalisasi input: ubah koma menjadi titik agar dipahami sistem
+            const cleanVal = valInput.replace(',', '.');
+
+            btn.disabled = true; 
+            btn.innerText = "Memproses...";
 
             try {
-                const r = await fetch(`/api/convert?val=${v}&kurs=${k}`);
+                const r = await fetch(`/api/convert?val=${cleanVal}&kurs=${kursCode}`);
                 const j = await r.json();
-                if(j.success) {
-                    document.getElementById('resultArea').classList.remove('d-none');
-                    document.getElementById('labelRes').innerText = `${v} ${k.toUpperCase()} setara dengan:`;
-                    // Menggunakan fungsi rupiah()
+
+                if (j.success) {
+                    resArea.classList.remove('d-none');
+                    document.getElementById('labelRes').innerText = `${valInput} ${kursCode.toUpperCase()} setara dengan:`;
                     document.getElementById('totalRes').innerText = rupiah(j.result);
+                } else {
+                    alert("Gagal melakukan konversi: " + (j.message || "Unknown error"));
                 }
-            } catch(e) { alert("Koneksi gagal."); }
-            btn.disabled = false; btn.innerText = "Konversi Sekarang";
+            } catch (e) { 
+                alert("Koneksi gagal atau server sibuk."); 
+                console.error(e);
+            } finally {
+                btn.disabled = false; 
+                btn.innerText = "Konversi Sekarang";
+            }
         }
-        fetchOptions();
+
+        // Memanggil fetchOptions saat halaman benar-benar siap
+        window.addEventListener('DOMContentLoaded', fetchOptions);
     </script>
 </body>
 </html>
