@@ -1,4 +1,3 @@
-
 const express = require('express');
 const axios = require('axios');
 const cheerio = require('cheerio');
@@ -16,17 +15,19 @@ class NizwarKurs {
 
     async fetchHTML() {
         try {
+            // Menaikkan timeout dan menambahkan header yang lebih lengkap
             const { data } = await axios.get(this.url, {
                 headers: { 
                     'User-Agent': this.uaGenerator.toString(),
-                    'Accept': 'text/html'
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                    'Accept-Language': 'id,en-US;q=0.7,en;q=0.3',
                 },
-                timeout: 10000
+                timeout: 8000 // Batasi 8 detik agar tidak melewati limit Vercel (10 detik)
             });
             return cheerio.load(data);
         } catch (error) {
             console.error("Scraping Error:", error.message);
-            throw new Error(`Gagal akses sumber data BI`);
+            throw error;
         }
     }
 
@@ -34,21 +35,17 @@ class NizwarKurs {
         const $ = await this.fetchHTML();
         const arrKepanjangan = {};
         
-        // Pastikan selector sesuai dengan struktur BI terbaru
-        $("#KodeSingkatan .table1 tr").slice(1).each((_, el) => {
+        // Mempercepat selector
+        $("#KodeSingkatan .table1 tr").each((i, el) => {
+            if (i === 0) return;
             const cells = $(el).find("td");
-            if (cells.length >= 2) {
-                const kode = $(cells[0]).text().trim().toLowerCase();
-                const nama = $(cells[1]).text().trim();
-                if (kode) arrKepanjangan[kode] = nama;
-            }
+            const kode = $(cells[0]).text().trim().toLowerCase();
+            const nama = $(cells[1]).text().trim();
+            if (kode) arrKepanjangan[kode] = nama;
         });
 
         const options = $("#ctl00_PlaceHolderMain_biWebKalkulatorKurs_ddlmatauang1 option");
-        
-        if (options.length === 0) {
-            throw new Error("Mata uang tidak ditemukan di sumber data.");
-        }
+        if (!options.length) throw new Error("Data tidak ditemukan di situs BI");
 
         return options.toArray()
             .map(el => {
@@ -61,7 +58,7 @@ class NizwarKurs {
                     val: parseFloat(nilai) / parseFloat(satuan)
                 };
             })
-            .filter(item => item !== null);
+            .filter(Boolean);
     }
 }
 
@@ -86,7 +83,11 @@ app.get('/api/convert', async (req, res) => {
         const result = (kursInfo.val * numericVal).toFixed(2);
         res.json({ success: true, kurs: kursInfo, result: parseFloat(result) });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        // Mengirimkan pesan error yang lebih jelas ke frontend
+        res.status(500).json({ 
+            success: false, 
+            message: "Gagal mengambil data dari BI. Silakan coba lagi nanti." 
+        });
     }
 });
 
