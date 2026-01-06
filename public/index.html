@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kalkulator Kurs BI</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background: #f4f7f6; min-height: 100vh; display: flex; flex-direction: column; justify-content: center; }
+        .card { border: none; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); }
+        .result-box { background: #e7f1ff; border-radius: 12px; border: 1px solid #cfe2ff; }
+    </style>
+</head>
+<body>
+    <div class="container py-5">
+        <div class="row justify-content-center">
+            <div class="col-md-5">
+                <div class="card p-4">
+                    <h4 class="text-center fw-bold mb-4 text-primary">Konversi Kurs BI</h4>
+                    <div class="mb-3">
+                        <label class="form-label small text-muted">Nominal Asing (Misal: 0.5 atau 1,5)</label>
+                        <input type="text" id="val" class="form-control form-control-lg" value="1">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small text-muted">Pilih Mata Uang</label>
+                        <select id="kurs" class="form-select form-select-lg"><option>Memuat data...</option></select>
+                    </div>
+                    <button onclick="doConvert()" id="btnAction" class="btn btn-primary btn-lg w-100 fw-bold">Konversi Sekarang</button>
+                    <div id="resultArea" class="mt-4 d-none">
+                        <div class="result-box p-3 text-center">
+                            <p id="labelRes" class="text-muted small mb-1"></p>
+                            <h2 id="totalRes" class="text-primary fw-bold mb-0"></h2>
+                        </div>
+                    </div>
+                </div>
+                <div class="text-center mt-3"><a href="/docs.html" class="text-muted small text-decoration-none">Dokumentasi API</a></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Fungsi format rupiah sesuai permintaan
+        function rupiah(angka) {
+            return new Intl.NumberFormat(
+                'id-ID',
+                { style: 'currency', currency: 'IDR', minimumFractionDigits: 0, maximumFractionDigits: 0 }
+            ).format(angka || 0);
+        }
+
+        async function fetchOptions() {
+            const r = await fetch('/api/convert');
+            const d = await r.json();
+            const s = document.getElementById('kurs');
+            s.innerHTML = d.data.map(k => `<option value="${k.kode}">${k.kode.toUpperCase()} - ${k.name}</option>`).join('');
+            s.value = "usd";
+        }
+
+        async function doConvert() {
+            const v = document.getElementById('val').value;
+            const k = document.getElementById('kurs').value;
+            const btn = document.getElementById('btnAction');
+            btn.disabled = true; btn.innerText = "Memproses...";
+
+            try {
+                const r = await fetch(`/api/convert?val=${v}&kurs=${k}`);
+                const j = await r.json();
+                if(j.success) {
+                    document.getElementById('resultArea').classList.remove('d-none');
+                    document.getElementById('labelRes').innerText = `${v} ${k.toUpperCase()} setara dengan:`;
+                    // Menggunakan fungsi rupiah()
+                    document.getElementById('totalRes').innerText = rupiah(j.result);
+                }
+            } catch(e) { alert("Koneksi gagal."); }
+            btn.disabled = false; btn.innerText = "Konversi Sekarang";
+        }
+        fetchOptions();
+    </script>
+</body>
+</html>
