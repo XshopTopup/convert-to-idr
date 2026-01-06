@@ -1,3 +1,4 @@
+
 const express = require('express');
 const axios = require('axios');
 const cheerio = require('cheerio');
@@ -16,12 +17,16 @@ class NizwarKurs {
     async fetchHTML() {
         try {
             const { data } = await axios.get(this.url, {
-                headers: { 'User-Agent': this.uaGenerator.toString() },
+                headers: { 
+                    'User-Agent': this.uaGenerator.toString(),
+                    'Accept': 'text/html'
+                },
                 timeout: 10000
             });
             return cheerio.load(data);
         } catch (error) {
-            throw new Error(`Gagal akses BI: ${error.message}`);
+            console.error("Scraping Error:", error.message);
+            throw new Error(`Gagal akses sumber data BI`);
         }
     }
 
@@ -29,15 +34,23 @@ class NizwarKurs {
         const $ = await this.fetchHTML();
         const arrKepanjangan = {};
         
+        // Pastikan selector sesuai dengan struktur BI terbaru
         $("#KodeSingkatan .table1 tr").slice(1).each((_, el) => {
             const cells = $(el).find("td");
-            const kode = $(cells[0]).text().trim().toLowerCase();
-            const nama = $(cells[1]).text().trim();
-            if (kode) arrKepanjangan[kode] = nama;
+            if (cells.length >= 2) {
+                const kode = $(cells[0]).text().trim().toLowerCase();
+                const nama = $(cells[1]).text().trim();
+                if (kode) arrKepanjangan[kode] = nama;
+            }
         });
 
-        return $("#ctl00_PlaceHolderMain_biWebKalkulatorKurs_ddlmatauang1 option")
-            .toArray()
+        const options = $("#ctl00_PlaceHolderMain_biWebKalkulatorKurs_ddlmatauang1 option");
+        
+        if (options.length === 0) {
+            throw new Error("Mata uang tidak ditemukan di sumber data.");
+        }
+
+        return options.toArray()
             .map(el => {
                 const val = $(el).val();
                 if (!val || !val.includes(".:.")) return null;
@@ -58,19 +71,22 @@ app.get('/api/convert', async (req, res) => {
 
     try {
         const listKurs = await service.getListOfKurs();
-        if (!val || !kurs) return res.json({ success: true, data: listKurs });
+
+        if (!val || !kurs) {
+            return res.json({ success: true, data: listKurs });
+        }
 
         const numericVal = parseFloat(val.toString().replace(',', '.'));
         const kursInfo = listKurs.find(item => item.kode === kurs.toLowerCase().trim());
         
         if (!kursInfo || isNaN(numericVal)) {
-            return res.status(400).json({ success: false, message: "Input tidak valid" });
+            return res.status(400).json({ success: false, message: "Parameter tidak valid" });
         }
 
         const result = (kursInfo.val * numericVal).toFixed(2);
         res.json({ success: true, kurs: kursInfo, result: parseFloat(result) });
     } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
+        res.status(500).json({ success: false, message: error.message });
     }
 });
 
